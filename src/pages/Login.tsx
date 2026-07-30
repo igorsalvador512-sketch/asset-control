@@ -1,67 +1,59 @@
-import React, { useState } from "react";
-import { signInWithEmailAndPassword } from "firebase/auth";
-import { auth } from "../firebase";
+import React, { useState } from 'react';
 
-export const Login: React.FC = () => {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
+interface LoginProps {
+  onLoginSuccess: () => void;
+}
 
-  const handleLogin = async (e: React.FormEvent) => {
+export function Login({ onLoginSuccess }: LoginProps) {
+  const [email, setEmail] = useState('');
+  const [senha, setSenha] = useState('');
+
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setError("");
-    setLoading(true);
-
-    try {
-      await signInWithEmailAndPassword(auth, email, password);
-    } catch (err: any) {
-      setError("E-mail ou senha incorretos.");
-    } finally {
-      setLoading(false);
+    if (email && senha) {
+      localStorage.setItem('usuario_logado', email);
+      onLoginSuccess();
+    } else {
+      alert('Por favor, preencha o e-mail e a senha.');
     }
   };
 
   return (
-    <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "100vh", backgroundColor: "#f8fafc" }}>
-      <div className="form-cadastro" style={{ width: "100%", maxWidth: "400px", margin: "0 20px" }}>
+    <div className="login-container">
+      <div className="login-card">
         <h2>Controle de Ativos - TI</h2>
-        <p className="subtitulo" style={{ marginBottom: "20px" }}>Acesso exclusivo para a equipe de TI</p>
+        <p className="login-subtitle">Acesso exclusivo para a equipe de TI</p>
 
-        {error && (
-          <div style={{ padding: "10px", backgroundColor: "#fef2f2", border: "1px solid #fca5a5", color: "#ef4444", borderRadius: "6px", fontSize: "13px", marginBottom: "16px" }}>
-            {error}
-          </div>
-        )}
-
-        <form onSubmit={handleLogin}>
-          <div className="input-group" style={{ marginBottom: "16px" }}>
-            <label>E-mail corporativo</label>
+        <form onSubmit={handleSubmit} className="login-form">
+          <div className="form-group">
+            <label htmlFor="email">E-mail corporativo</label>
             <input
+              id="email"
               type="email"
+              placeholder="seu.nome@hospital.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              placeholder="seu.nome@hospital.com"
             />
           </div>
 
-          <div className="input-group" style={{ marginBottom: "20px" }}>
-            <label>Senha</label>
+          <div className="form-group">
+            <label htmlFor="senha">Senha</label>
             <input
+              id="senha"
               type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
               placeholder="••••••••"
+              value={senha}
+              onChange={(e) => setSenha(e.target.value)}
+              required
             />
           </div>
 
-          <button type="submit" className="btn-salvar" disabled={loading} style={{ width: "100%" }}>
-            {loading ? "Entrando..." : "Entrar no Sistema"}
+          <button type="submit" className="btn-login">
+            Entrar no Sistema
           </button>
         </form>
       </div>
     </div>
   );
-};
+}
