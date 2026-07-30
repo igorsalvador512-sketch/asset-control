@@ -263,3 +263,21 @@ h1 {
   background: #ef4444;
   color: white;
 }
+/* Cabeçalho da aplicação quando logado */
+.app-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 24px;
+  background-color: #ffffff;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.user-info {
+  font-size: 13px;
+  color: #64748b;
+}
+
+.user-info strong {
+  color: #0f172a;
+}
