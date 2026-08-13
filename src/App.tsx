@@ -1,73 +1,76 @@
 import { useState, useEffect } from "react";
 import { Login } from "./pages/Login";
 
-// Importações das telas e componentes do seu projeto
 import { Sidebar } from "./components/Sidebar";
 import { Dashboard } from "./pages/Dashboard";
-import { Equipamentos } from "./pages/Equipamentos"; // Importe a tela de Equipamentos
-// import { Manutencoes } from "./pages/Manutencoes"; // Se tiver outras páginas, importe aqui
+import { Equipamentos } from "./pages/Equipamentos";
 
 export function App() {
-  const [userEmail, setUserEmail] = useState<string | null>(null);
-  // Estado que controla qual página está visível no momento
-  const [abaAtiva, setAbaAtiva] = useState<string>("dashboard");
+  const [usuario, setUsuario] = useState<any>(null);
+  const [abaAtiva, setAbaAtiva] = useState("dashboard");
 
-  // Checa se o usuário já fez login ao carregar a página
   useEffect(() => {
-    const usuarioSalvo = localStorage.getItem("usuario_logado");
-    if (usuarioSalvo) {
-      setUserEmail(usuarioSalvo);
+    const token = localStorage.getItem("token");
+    const usuarioSalvo = localStorage.getItem("usuario");
+
+    if (token && usuarioSalvo) {
+      setUsuario(JSON.parse(usuarioSalvo));
     }
   }, []);
 
-  const handleLoginSuccess = () => {
-    const usuario = localStorage.getItem("usuario_logado");
-    setUserEmail(usuario);
-  };
+  function handleLoginSuccess() {
+    const usuarioSalvo = localStorage.getItem("usuario");
 
-  const handleLogout = () => {
-    localStorage.removeItem("usuario_logado");
-    setUserEmail(null);
-  };
+    if (usuarioSalvo) {
+      setUsuario(JSON.parse(usuarioSalvo));
+    }
+  }
 
-  // 1. Se NÃO estiver logado -> Mostra a tela de Login
-  if (!userEmail) {
+  function handleLogout() {
+    localStorage.removeItem("token");
+    localStorage.removeItem("usuario");
+    setUsuario(null);
+  }
+
+  if (!usuario) {
     return <Login onLoginSuccess={handleLoginSuccess} />;
   }
 
-  // 2. Se ESTIVER logado -> Renderiza o Dashboard com a Sidebar ativa
   return (
     <div className="app-container">
-      {/* Passamos o estado e a função para a Sidebar saber qual botão marcar e alternar */}
-      <Sidebar abaAtiva={abaAtiva} setAbaAtiva={setAbaAtiva} />
+      <Sidebar
+        abaAtiva={abaAtiva}
+        setAbaAtiva={setAbaAtiva}
+      />
 
       <div className="content">
-        {/* Barra superior de informações e Sair */}
-        <div 
-          className="app-header" 
-          style={{ 
-            display: "flex", 
-            justify: "space-between", 
-            alignItems: "center", 
+        <div
+          className="app-header"
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
             marginBottom: "20px",
-            background: "#ffffff",
+            background: "#fff",
             padding: "12px 20px",
             borderRadius: "8px",
-            boxShadow: "0 1px 3px rgba(0,0,0,0.05)"
+            boxShadow: "0 1px 3px rgba(0,0,0,.08)",
           }}
         >
-          <span className="user-info" style={{ fontSize: "14px", color: "#64748b" }}>
-            Conectado como: <strong style={{ color: "#0f172a" }}>{userEmail}</strong>
+          <span>
+            Bem-vindo, <strong>{usuario.nome}</strong>
           </span>
-          <button onClick={handleLogout} className="btn-excluir">
+
+          <button
+            className="btn-excluir"
+            onClick={handleLogout}
+          >
             Sair
           </button>
         </div>
 
-        {/* Alternância das telas com base na abaAtiva */}
         {abaAtiva === "dashboard" && <Dashboard />}
         {abaAtiva === "equipamentos" && <Equipamentos />}
-        {/* {abaAtiva === "manutencoes" && <Manutencoes />} */}
       </div>
     </div>
   );
