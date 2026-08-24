@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 
 interface Equipamento {
   id: string;
@@ -9,33 +9,16 @@ interface Equipamento {
   valor: number;
 }
 
-export function Dashboard() {
-  const [equipamentos, setEquipamentos] = useState<Equipamento[]>([]);
+interface DashboardProps {
+  equipamentos: Equipamento[];
+}
+
+export function Dashboard({ equipamentos }: DashboardProps) {
 
   // ESTADOS PARA OS FILTROS
   const [buscaTexto, setBuscaTexto] = useState('');
   const [setorFiltro, setSetorFiltro] = useState('TODOS');
   const [atribuicaoFiltro, setAtribuicaoFiltro] = useState<'TODOS' | 'EM_USO' | 'SEM_USO'>('TODOS');
-
-  useEffect(() => {
-    const carregarDados = () => {
-      try {
-        const salvos = localStorage.getItem('equipamentos_db');
-        if (salvos) {
-          const dados = JSON.parse(salvos);
-          if (Array.isArray(dados)) {
-            setEquipamentos(dados);
-          }
-        }
-      } catch (e) {
-        console.error('Erro ao carregar equipamentos no Dashboard:', e);
-      }
-    };
-
-    carregarDados();
-    window.addEventListener('storage', carregarDados);
-    return () => window.removeEventListener('storage', carregarDados);
-  }, []);
 
   // LISTA DE SETORES ÚNICOS PARA O SELECT
   const listaSetores = Array.from(

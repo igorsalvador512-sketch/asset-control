@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import axios from "axios";
+import api from "../services/api";
 
 interface LoginProps {
   onLoginSuccess: () => void;
@@ -17,7 +17,7 @@ export function Login({ onLoginSuccess }: LoginProps) {
 
     try {
       if (cadastro) {
-        await axios.post("http://192.168.24.199:3001/api/auth/register", {
+        await api.post("/auth/register", {
           nome,
           email,
           senha,
@@ -32,8 +32,8 @@ export function Login({ onLoginSuccess }: LoginProps) {
         return;
       }
 
-      const resposta = await axios.post(
-        "http://192.168.24.199:3001/api/auth/login",
+      const resposta = await api.post(
+        "/auth/login",
         {
           email,
           senha,

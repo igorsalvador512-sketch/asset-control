@@ -2,6 +2,8 @@ const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const db = require("../database/database");
 
+const JWT_SECRET = process.env.JWT_SECRET || "assetcontrol123";
+
 // Cadastro
 exports.register = async (req, res) => {
   const { nome, email, senha } = req.body;
@@ -70,7 +72,7 @@ exports.login = (req, res) => {
           id: usuario.id,
           nome: usuario.nome
         },
-        "assetcontrol123",
+        JWT_SECRET,
         {
           expiresIn: "8h"
         }

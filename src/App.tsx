@@ -1,41 +1,109 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Login } from "./pages/Login";
-
 import { Sidebar } from "./components/Sidebar";
 import { Dashboard } from "./pages/Dashboard";
-import { Equipamentos } from "./pages/Equipamentos";
+import { Equipamentos, type Equipamento } from "./pages/Equipamentos";
+import api from "./services/api";
 
 export function App() {
   const [usuario, setUsuario] = useState<any>(null);
   const [abaAtiva, setAbaAtiva] = useState("dashboard");
+  const [equipamentos, setEquipamentos] = useState<Equipamento[]>([]);
+  const [carregandoEquipamentos, setCarregandoEquipamentos] = useState(true);
 
+  // ==========================================
+  // RECUPERAR USUARIO LOGADO
+  // ==========================================
   useEffect(() => {
     const token = localStorage.getItem("token");
     const usuarioSalvo = localStorage.getItem("usuario");
 
     if (token && usuarioSalvo) {
-      setUsuario(JSON.parse(usuarioSalvo));
+      try {
+        setUsuario(JSON.parse(usuarioSalvo));
+      } catch {
+        localStorage.removeItem("usuario");
+      }
     }
   }, []);
 
+  // ==========================================
+  // CARREGAR EQUIPAMENTOS SOMENTE DA API
+  // ==========================================
+  useEffect(() => {
+    if (!usuario) return;
+
+    let ativo = true;
+
+    async function carregarEquipamentos() {
+      setCarregandoEquipamentos(true);
+
+      try {
+        const resposta = await api.get<Equipamento[]>("/equipamentos");
+
+        const dados = Array.isArray(resposta.data)
+          ? resposta.data
+          : [];
+
+        if (ativo) {
+          setEquipamentos(dados);
+        }
+      } catch (erro) {
+        console.error("Erro ao carregar equipamentos:", erro);
+
+        if (ativo) {
+          setEquipamentos([]);
+        }
+      } finally {
+        if (ativo) {
+          setCarregandoEquipamentos(false);
+        }
+      }
+    }
+
+    carregarEquipamentos();
+
+    return () => {
+      ativo = false;
+    };
+  }, [usuario]);
+
+  // ==========================================
+  // LOGIN
+  // ==========================================
   function handleLoginSuccess() {
     const usuarioSalvo = localStorage.getItem("usuario");
 
     if (usuarioSalvo) {
-      setUsuario(JSON.parse(usuarioSalvo));
+      try {
+        setUsuario(JSON.parse(usuarioSalvo));
+      } catch {
+        setUsuario(null);
+      }
     }
   }
 
+  // ==========================================
+  // LOGOUT
+  // ==========================================
   function handleLogout() {
     localStorage.removeItem("token");
     localStorage.removeItem("usuario");
+
     setUsuario(null);
+    setEquipamentos([]);
   }
 
+  // ==========================================
+  // TELA DE LOGIN
+  // ==========================================
   if (!usuario) {
     return <Login onLoginSuccess={handleLoginSuccess} />;
   }
 
+  // ==========================================
+  // APLICACAO
+  // ==========================================
   return (
     <div className="app-container">
       <Sidebar
@@ -44,6 +112,8 @@ export function App() {
       />
 
       <div className="content">
+
+        {/* CABECALHO */}
         <div
           className="app-header"
           style={{
@@ -58,7 +128,10 @@ export function App() {
           }}
         >
           <span>
-            Bem-vindo, <strong>{usuario.nome}</strong>
+            Bem-vindo,{" "}
+            <strong>
+              {usuario.nome || usuario.email}
+            </strong>
           </span>
 
           <button
@@ -69,8 +142,35 @@ export function App() {
           </button>
         </div>
 
-        {abaAtiva === "dashboard" && <Dashboard />}
-        {abaAtiva === "equipamentos" && <Equipamentos />}
+        {/* CARREGAMENTO */}
+        {carregandoEquipamentos ? (
+          <div
+            style={{
+              padding: "40px",
+              textAlign: "center",
+              color: "#64748b",
+            }}
+          >
+            Carregando equipamentos...
+          </div>
+        ) : (
+          <>
+            {/* DASHBOARD */}
+            {abaAtiva === "dashboard" && (
+              <Dashboard
+                equipamentos={equipamentos}
+              />
+            )}
+
+            {/* EQUIPAMENTOS */}
+            {abaAtiva === "equipamentos" && (
+              <Equipamentos
+                equipamentos={equipamentos}
+                setEquipamentos={setEquipamentos}
+              />
+            )}
+          </>
+        )}
       </div>
     </div>
   );

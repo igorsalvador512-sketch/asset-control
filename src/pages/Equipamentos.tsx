@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useRef } from 'react';
+import api from '../services/api';
 import * as XLSX from 'xlsx';
 
-interface Equipamento {
+export interface Equipamento {
   id: string;
   nome: string;
   patrimonio: string;
@@ -10,20 +11,12 @@ interface Equipamento {
   valor: number;
 }
 
-export function Equipamentos() {
-  const [equipamentos, setEquipamentos] = useState<Equipamento[]>(() => {
-    try {
-      const salvos = localStorage.getItem('equipamentos_db');
-      if (salvos) {
-        const dados = JSON.parse(salvos);
-        return Array.isArray(dados) ? dados : [];
-      }
-      return [];
-    } catch {
-      return [];
-    }
-  });
+interface EquipamentosProps {
+  equipamentos: Equipamento[];
+  setEquipamentos: React.Dispatch<React.SetStateAction<Equipamento[]>>;
+}
 
+export function Equipamentos({ equipamentos, setEquipamentos }: EquipamentosProps) {
   const [selecionados, setSelecionados] = useState<string[]>([]);
   
   // ESTADOS DO FORMULÁRIO DE CADASTRO
@@ -39,15 +32,7 @@ export function Equipamentos() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    try {
-      localStorage.setItem('equipamentos_db', JSON.stringify(equipamentos));
-    } catch (e) {
-      console.error('Erro ao salvar no localStorage:', e);
-    }
-  }, [equipamentos]);
-
-  const handleAdicionar = (e: React.FormEvent) => {
+  const handleAdicionar = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!nome.trim() || !patrimonio.trim()) {
       alert('Por favor, preencha o Nome e o Patrimônio.');
@@ -63,7 +48,15 @@ export function Equipamentos() {
       valor: parseFloat(valorInput.replace(',', '.')) || 0,
     };
 
-    setEquipamentos((prev) => [novo, ...prev]);
+    try {
+      const resposta = await api.post<Equipamento>('/equipamentos', novo);
+      setEquipamentos((prev) => [resposta.data, ...prev]);
+    } catch (erro: any) {
+      console.error(erro);
+      alert(erro.response?.data?.erro || 'Erro ao cadastrar equipamento.');
+      return;
+    }
+
     setNome('');
     setPatrimonio('');
     setUsuario('');
@@ -72,7 +65,7 @@ export function Equipamentos() {
   };
 
   // SALVAR ALTERAÇÕES DA EDIÇÃO
-  const handleSalvarEdicao = (e: React.FormEvent) => {
+  const handleSalvarEdicao = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!equipamentoEmEdicao) return;
 
@@ -81,33 +74,56 @@ export function Equipamentos() {
       return;
     }
 
-    setEquipamentos((prev) =>
-      prev.map((item) => (item.id === equipamentoEmEdicao.id ? equipamentoEmEdicao : item))
-    );
-
-    setEquipamentoEmEdicao(null); // Fecha o modal
+    try {
+      const resposta = await api.put<Equipamento>(`/equipamentos/${equipamentoEmEdicao.id}`, equipamentoEmEdicao);
+      setEquipamentos((prev) =>
+        prev.map((item) => (item.id === resposta.data.id ? resposta.data : item))
+      );
+      setEquipamentoEmEdicao(null);
+    } catch (erro: any) {
+      console.error(erro);
+      alert(erro.response?.data?.erro || 'Erro ao salvar alterações.');
+    }
   };
 
-  const handleExcluirUnico = (id: string) => {
-    if (confirm('Deseja realmente remover este equipamento?')) {
+  const handleExcluirUnico = async (id: string) => {
+    if (!confirm('Deseja realmente remover este equipamento?')) return;
+
+    try {
+      await api.delete(`/equipamentos/${id}`);
       setEquipamentos((prev) => prev.filter((e) => e.id !== id));
       setSelecionados((prev) => prev.filter((item) => item !== id));
+    } catch (erro: any) {
+      console.error(erro);
+      alert(erro.response?.data?.erro || 'Erro ao excluir equipamento.');
     }
   };
 
-  const handleExcluirSelecionados = () => {
+  const handleExcluirSelecionados = async () => {
     if (selecionados.length === 0) return;
-    if (confirm(`Tem certeza que deseja excluir os ${selecionados.length} itens selecionados?`)) {
+    if (!confirm(`Tem certeza que deseja excluir os ${selecionados.length} itens selecionados?`)) return;
+
+    try {
+      await Promise.all(selecionados.map((id) => api.delete(`/equipamentos/${id}`)));
       setEquipamentos((prev) => prev.filter((e) => !selecionados.includes(e.id)));
       setSelecionados([]);
+    } catch (erro: any) {
+      console.error(erro);
+      alert(erro.response?.data?.erro || 'Erro ao excluir os equipamentos selecionados.');
     }
   };
 
-  const handleExcluirTodos = () => {
+  const handleExcluirTodos = async () => {
     if (equipamentos.length === 0) return;
-    if (confirm('⚠️ ATENÇÃO: Deseja apagar TODOS os equipamentos cadastrados no sistema?')) {
+    if (!confirm('⚠️ ATENÇÃO: Deseja apagar TODOS os equipamentos cadastrados no sistema?')) return;
+
+    try {
+      await api.delete('/equipamentos');
       setEquipamentos([]);
       setSelecionados([]);
+    } catch (erro: any) {
+      console.error(erro);
+      alert(erro.response?.data?.erro || 'Erro ao excluir os equipamentos.');
     }
   };
 
@@ -131,12 +147,12 @@ export function Equipamentos() {
     XLSX.writeFile(workbook, `Ativos_TI_${new Date().toISOString().slice(0, 10)}.xlsx`);
   };
 
-  const handleImportarExcel = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImportarExcel = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = (evt) => {
+    reader.onload = async (evt) => {
       try {
         const bstr = evt.target?.result;
         const wb = XLSX.read(bstr, { type: 'binary' });
@@ -202,8 +218,15 @@ export function Equipamentos() {
           };
         });
 
-        setEquipamentos((prev) => [...novosEquipamentos, ...prev]);
-        alert(`🎉 Sucesso! ${novosEquipamentos.length} itens importados perfeitamente.`);
+        try {
+          const resposta = await api.post<{ equipamentos: Equipamento[] }>('/equipamentos/bulk', novosEquipamentos);
+          const importados = Array.isArray(resposta.data?.equipamentos) ? resposta.data.equipamentos : novosEquipamentos;
+          setEquipamentos((prev) => [...importados, ...prev]);
+          alert(`🎉 Sucesso! ${importados.length} itens importados perfeitamente.`);
+        } catch (erro: any) {
+          console.error(erro);
+          alert(erro.response?.data?.erro || 'Erro ao importar equipamentos para o servidor.');
+        }
       } catch (err) {
         console.error(err);
         alert('Erro ao importar. Verifique o arquivo Excel.');
@@ -214,7 +237,7 @@ export function Equipamentos() {
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  const equipamentosFiltrados = equipamentos.filter((item) => {
+  const equipamentosFiltrados = (equipamentos || []).filter((item) => {
     const termo = busca.toLowerCase();
     const nomeItem = String(item?.nome || '').toLowerCase();
     const patrimonioItem = String(item?.patrimonio || '').toLowerCase();
@@ -534,7 +557,6 @@ export function Equipamentos() {
 
                       <td style={{ padding: '14px 16px', borderBottom: '1px solid #f1f5f9', textAlign: 'right' }}>
                         <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-                          {/* BOTÃO EDITAR */}
                           <button
                             onClick={() => setEquipamentoEmEdicao(item)}
                             style={{ background: '#f1f5f9', color: '#2563eb', border: '1px solid #cbd5e1', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: '600' }}
@@ -542,7 +564,6 @@ export function Equipamentos() {
                             ✏️ Editar
                           </button>
 
-                          {/* BOTÃO EXCLUIR */}
                           <button
                             onClick={() => handleExcluirUnico(idItem)}
                             style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: '600' }}
