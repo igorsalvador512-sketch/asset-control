@@ -2,14 +2,19 @@ import { useEffect, useState } from "react";
 import { Login } from "./pages/Login";
 import { Sidebar } from "./components/Sidebar";
 import { Dashboard } from "./pages/Dashboard";
-import { Equipamentos, type Equipamento } from "./pages/Equipamentos";
+import {
+  Equipamentos,
+  type Equipamento,
+} from "./pages/Equipamentos";
+import { Impressoras } from "./pages/Impressoras";
 import api from "./services/api";
 
 export function App() {
   const [usuario, setUsuario] = useState<any>(null);
   const [abaAtiva, setAbaAtiva] = useState("dashboard");
   const [equipamentos, setEquipamentos] = useState<Equipamento[]>([]);
-  const [carregandoEquipamentos, setCarregandoEquipamentos] = useState(true);
+  const [carregandoEquipamentos, setCarregandoEquipamentos] =
+    useState(true);
 
   // ==========================================
   // RECUPERAR USUARIO LOGADO
@@ -28,7 +33,7 @@ export function App() {
   }, []);
 
   // ==========================================
-  // CARREGAR EQUIPAMENTOS SOMENTE DA API
+  // CARREGAR EQUIPAMENTOS
   // ==========================================
   useEffect(() => {
     if (!usuario) return;
@@ -39,7 +44,8 @@ export function App() {
       setCarregandoEquipamentos(true);
 
       try {
-        const resposta = await api.get<Equipamento[]>("/equipamentos");
+        const resposta =
+          await api.get<Equipamento[]>("/equipamentos");
 
         const dados = Array.isArray(resposta.data)
           ? resposta.data
@@ -49,7 +55,10 @@ export function App() {
           setEquipamentos(dados);
         }
       } catch (erro) {
-        console.error("Erro ao carregar equipamentos:", erro);
+        console.error(
+          "Erro ao carregar equipamentos:",
+          erro
+        );
 
         if (ativo) {
           setEquipamentos([]);
@@ -72,7 +81,8 @@ export function App() {
   // LOGIN
   // ==========================================
   function handleLoginSuccess() {
-    const usuarioSalvo = localStorage.getItem("usuario");
+    const usuarioSalvo =
+      localStorage.getItem("usuario");
 
     if (usuarioSalvo) {
       try {
@@ -98,7 +108,11 @@ export function App() {
   // TELA DE LOGIN
   // ==========================================
   if (!usuario) {
-    return <Login onLoginSuccess={handleLoginSuccess} />;
+    return (
+      <Login
+        onLoginSuccess={handleLoginSuccess}
+      />
+    );
   }
 
   // ==========================================
@@ -112,7 +126,6 @@ export function App() {
       />
 
       <div className="content">
-
         {/* CABECALHO */}
         <div
           className="app-header"
@@ -124,11 +137,12 @@ export function App() {
             background: "#fff",
             padding: "12px 20px",
             borderRadius: "8px",
-            boxShadow: "0 1px 3px rgba(0,0,0,.08)",
+            boxShadow:
+              "0 1px 3px rgba(0,0,0,.08)",
           }}
         >
           <span>
-            Bem-vindo,{" "}
+            Bem-vindo{" "}
             <strong>
               {usuario.nome || usuario.email}
             </strong>
@@ -157,17 +171,22 @@ export function App() {
           <>
             {/* DASHBOARD */}
             {abaAtiva === "dashboard" && (
-              <Dashboard
-                equipamentos={equipamentos}
-              />
+              <Dashboard />
             )}
 
             {/* EQUIPAMENTOS */}
             {abaAtiva === "equipamentos" && (
               <Equipamentos
                 equipamentos={equipamentos}
-                setEquipamentos={setEquipamentos}
+                setEquipamentos={
+                  setEquipamentos
+                }
               />
+            )}
+
+            {/* IMPRESSORAS */}
+            {abaAtiva === "impressoras" && (
+              <Impressoras />
             )}
           </>
         )}

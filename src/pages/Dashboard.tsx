@@ -1,329 +1,757 @@
-import React, { useState } from 'react';
+import { useEffect, useMemo, useState } from "react";
+import api from "../services/api";
+
+type Filtro = "todos" | "equipamentos" | "impressoras";
 
 interface Equipamento {
-  id: string;
-  nome: string;
-  patrimonio: string;
-  usuario: string;
-  setorUsuario: string;
-  valor: number;
+  id: number;
+  nome?: string;
+  categoria?: string;
+  patrimonio?: string;
+  status?: string;
+  localizacao?: string;
+  setor_usuario?: string;
 }
 
-interface DashboardProps {
-  equipamentos: Equipamento[];
+interface Impressora {
+  id: number;
+  patrimonio?: string;
+  ip?: string;
+  local?: string;
+  tipo?: string;
+  marca?: string;
+  modelo?: string;
+  situacao?: string;
 }
 
-export function Dashboard({ equipamentos }: DashboardProps) {
+export function Dashboard() {
+  const [filtro, setFiltro] = useState<Filtro>("todos");
 
-  // ESTADOS PARA OS FILTROS
-  const [buscaTexto, setBuscaTexto] = useState('');
-  const [setorFiltro, setSetorFiltro] = useState('TODOS');
-  const [atribuicaoFiltro, setAtribuicaoFiltro] = useState<'TODOS' | 'EM_USO' | 'SEM_USO'>('TODOS');
+  const [equipamentos, setEquipamentos] = useState<Equipamento[]>([]);
+  const [impressoras, setImpressoras] = useState<Impressora[]>([]);
 
-  // LISTA DE SETORES ÚNICOS PARA O SELECT
-  const listaSetores = Array.from(
-    new Set(equipamentos.map((e) => e.setorUsuario?.trim()).filter(Boolean))
-  ).sort();
+  const [carregando, setCarregando] = useState(true);
 
-  // MÉTRICAS GERAIS (INDEPENDENTES DOS FILTROS)
-  const totalAtivos = equipamentos.length;
+  useEffect(() => {
+    carregarDados();
+  }, []);
 
-  const valorTotalPatrimonio = equipamentos.reduce((acc, item) => {
-    const v = typeof item.valor === 'number' ? item.valor : parseFloat(String(item.valor || 0));
-    return acc + (isNaN(v) ? 0 : v);
-  }, 0);
+  async function carregarDados() {
+    setCarregando(true);
 
-  const comAtribuicao = equipamentos.filter(
-    (item) => item.usuario && item.usuario.trim() !== '' && item.usuario !== '—'
+    try {
+      const [resEquipamentos, resImpressoras] =
+        await Promise.all([
+          api.get("/equipamentos"),
+          api.get("/impressoras"),
+        ]);
+
+      setEquipamentos(
+        Array.isArray(resEquipamentos.data)
+          ? resEquipamentos.data
+          : []
+      );
+
+      setImpressoras(
+        Array.isArray(resImpressoras.data)
+          ? resImpressoras.data
+          : []
+      );
+    } catch (erro) {
+      console.error("Erro ao carregar dados do dashboard:", erro);
+    } finally {
+      setCarregando(false);
+    }
+  }
+
+  const mostrarEquipamentos =
+    filtro === "todos" || filtro === "equipamentos";
+
+  const mostrarImpressoras =
+    filtro === "todos" || filtro === "impressoras";
+
+  const totalEquipamentos =
+    mostrarEquipamentos ? equipamentos.length : 0;
+
+  const totalImpressoras =
+    mostrarImpressoras ? impressoras.length : 0;
+
+  const totalAtivos =
+    totalEquipamentos + totalImpressoras;
+
+  const equipamentosFuncionando = equipamentos.filter(
+    (item) =>
+      normalizar(item.status) === "funcionando" ||
+      normalizar(item.status) === "ativo"
   ).length;
 
-  const semAtribuicao = totalAtivos - comAtribuicao;
+  const equipamentosManutencao = equipamentos.filter(
+    (item) =>
+      normalizar(item.status).includes("manuten")
+  ).length;
 
-  // DISTRIBUIÇÃO POR SETOR
-  const setoresMap: { [key: string]: number } = {};
-  equipamentos.forEach((item) => {
-    const setor = item.setorUsuario && item.setorUsuario.trim() !== '' ? item.setorUsuario.trim() : 'Não Informado';
-    setoresMap[setor] = (setoresMap[setor] || 0) + 1;
-  });
+  const equipamentosParados = equipamentos.filter(
+    (item) => {
+      const status = normalizar(item.status);
 
-  const setoresOrdenados = Object.entries(setoresMap)
-    .map(([nome, quantidade]) => ({
-      nome,
-      quantidade,
-      porcentagem: totalAtivos > 0 ? Math.round((quantidade / totalAtivos) * 100) : 0,
-    }))
-    .sort((a, b) => b.quantidade - a.quantidade);
+      return (
+        status.includes("parad") ||
+        status.includes("inativ") ||
+        status.includes("baixad")
+      );
+    }
+  ).length;
 
-  // APLICAÇÃO DOS FILTROS NA TABELA DO DASHBOARD
-  const equipamentosFiltrados = equipamentos.filter((item) => {
-    const termo = buscaTexto.toLowerCase().trim();
-    const nome = String(item.nome || '').toLowerCase();
-    const patrimonio = String(item.patrimonio || '').toLowerCase();
-    const usuario = String(item.usuario || '').toLowerCase();
-    const setor = String(item.setorUsuario || '').toLowerCase();
+  const impressorasFuncionando = impressoras.filter(
+    (item) =>
+      normalizar(item.situacao) === "funcionando"
+  ).length;
 
-    // Filtro de Texto
-    const bateuTexto =
-      !termo ||
-      nome.includes(termo) ||
-      patrimonio.includes(termo) ||
-      usuario.includes(termo) ||
-      setor.includes(termo);
+  const impressorasManutencao = impressoras.filter(
+    (item) =>
+      normalizar(item.situacao).includes("manuten")
+  ).length;
 
-    // Filtro por Setor
-    const bateuSetor =
-      setorFiltro === 'TODOS' ||
-      (item.setorUsuario || '').trim().toLowerCase() === setorFiltro.toLowerCase();
+  const impressorasParadas = impressoras.filter(
+    (item) => {
+      const situacao = normalizar(item.situacao);
 
-    // Filtro por Atribuição
-    const temUsuario = Boolean(item.usuario && item.usuario.trim() !== '' && item.usuario !== '—');
-    const bateuAtribuicao =
-      atribuicaoFiltro === 'TODOS' ||
-      (atribuicaoFiltro === 'EM_USO' && temUsuario) ||
-      (atribuicaoFiltro === 'SEM_USO' && !temUsuario);
+      return (
+        situacao.includes("parad") ||
+        situacao.includes("inativ")
+      );
+    }
+  ).length;
 
-    return bateuTexto && bateuSetor && bateuAtribuicao;
-  });
+  const totalFuncionando =
+    (mostrarEquipamentos
+      ? equipamentosFuncionando
+      : 0) +
+    (mostrarImpressoras
+      ? impressorasFuncionando
+      : 0);
 
-  const limparFiltros = () => {
-    setBuscaTexto('');
-    setSetorFiltro('TODOS');
-    setAtribuicaoFiltro('TODOS');
-  };
+  const totalManutencao =
+    (mostrarEquipamentos
+      ? equipamentosManutencao
+      : 0) +
+    (mostrarImpressoras
+      ? impressorasManutencao
+      : 0);
 
-  const temFiltroAtivo = buscaTexto !== '' || setorFiltro !== 'TODOS' || atribuicaoFiltro !== 'TODOS';
+  const totalParados =
+    (mostrarEquipamentos
+      ? equipamentosParados
+      : 0) +
+    (mostrarImpressoras
+      ? impressorasParadas
+      : 0);
+
+  const locais = useMemo(() => {
+    const mapa = new Map<string, number>();
+
+    if (mostrarEquipamentos) {
+      equipamentos.forEach((item) => {
+        const local =
+          item.localizacao?.trim() || "Não informado";
+
+        mapa.set(local, (mapa.get(local) || 0) + 1);
+      });
+    }
+
+    if (mostrarImpressoras) {
+      impressoras.forEach((item) => {
+        const local =
+          item.local?.trim() || "Não informado";
+
+        mapa.set(local, (mapa.get(local) || 0) + 1);
+      });
+    }
+
+    return Array.from(mapa.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 8);
+  }, [
+    equipamentos,
+    impressoras,
+    mostrarEquipamentos,
+    mostrarImpressoras,
+  ]);
+
+  const marcas = useMemo(() => {
+    const mapa = new Map<string, number>();
+
+    if (mostrarImpressoras) {
+      impressoras.forEach((item) => {
+        const marca =
+          item.marca?.trim() || "Não informado";
+
+        mapa.set(
+          marca,
+          (mapa.get(marca) || 0) + 1
+        );
+      });
+    }
+
+    return Array.from(mapa.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 8);
+  }, [impressoras, mostrarImpressoras]);
+
+  if (carregando) {
+    return (
+      <div
+        style={{
+          width: "100%",
+          minHeight: "400px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          color: "#64748b",
+          fontSize: "14px",
+        }}
+      >
+        Carregando dashboard...
+      </div>
+    );
+  }
 
   return (
-    <div style={{ width: '100%', maxWidth: '1400px', margin: '0 auto', fontFamily: "'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" }}>
-      
-      {/* HEADER DA PÁGINA */}
-      <div style={{ marginBottom: '28px' }}>
-        <h1 style={{ fontSize: '28px', fontWeight: '800', color: '#0f172a', letterSpacing: '-0.03em', marginBottom: '6px' }}>
-          Dashboard Geral
-        </h1>
-        <p style={{ color: '#64748b', fontSize: '14px', fontWeight: '400' }}>
-          Visão geral dos ativos de TI cadastrados, distribuição por setor e filtros de consulta rápida.
-        </p>
+    <div
+      style={{
+        width: "100%",
+        maxWidth: "100%",
+        minWidth: 0,
+        padding: "0 12px 30px",
+        boxSizing: "border-box",
+        fontFamily:
+          "'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+      }}
+    >
+      {/* CABEÇALHO */}
+
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "flex-start",
+          gap: "20px",
+          flexWrap: "wrap",
+          marginBottom: "28px",
+        }}
+      >
+        <div>
+          <h1
+            style={{
+              margin: "0 0 6px",
+              fontSize: "28px",
+              fontWeight: "800",
+              color: "#0f172a",
+            }}
+          >
+            Dashboard
+          </h1>
+
+          <p
+            style={{
+              margin: 0,
+              color: "#64748b",
+              fontSize: "14px",
+            }}
+          >
+            Visão geral dos ativos de TI do hospital.
+          </p>
+        </div>
+
+        <button
+          onClick={carregarDados}
+          style={{
+            padding: "10px 16px",
+            border: "1px solid #cbd5e1",
+            borderRadius: "10px",
+            background: "#ffffff",
+            color: "#334155",
+            fontWeight: "700",
+            cursor: "pointer",
+          }}
+        >
+          🔄 Atualizar
+        </button>
       </div>
 
-      {/* CARDS DE MÉTRICAS */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '20px', marginBottom: '28px' }}>
-        
-        <div
-          onClick={limparFiltros}
-          style={{ background: '#ffffff', borderRadius: '16px', padding: '24px', border: '1px solid #e2e8f0', boxShadow: '0 4px 20px -2px rgba(0, 0, 0, 0.03)', cursor: 'pointer' }}
-          title="Clique para ver todos"
+      {/* FILTRO */}
+
+      <div
+        style={{
+          background: "#ffffff",
+          border: "1px solid #e2e8f0",
+          borderRadius: "14px",
+          padding: "8px",
+          display: "flex",
+          gap: "8px",
+          flexWrap: "wrap",
+          marginBottom: "24px",
+          boxShadow:
+            "0 4px 20px -2px rgba(0,0,0,0.04)",
+        }}
+      >
+        <BotaoFiltro
+          ativo={filtro === "todos"}
+          onClick={() => setFiltro("todos")}
         >
-          <span style={{ fontSize: '11px', fontWeight: '700', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-            TOTAL DE ATIVOS
-          </span>
-          <p style={{ fontSize: '32px', fontWeight: '800', color: '#0f172a', margin: '12px 0 0 0' }}>
-            {totalAtivos}
-          </p>
-        </div>
+          📊 Todos
+        </BotaoFiltro>
 
-        <div style={{ background: '#ffffff', borderRadius: '16px', padding: '24px', border: '1px solid #e2e8f0', boxShadow: '0 4px 20px -2px rgba(0, 0, 0, 0.03)' }}>
-          <span style={{ fontSize: '11px', fontWeight: '700', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-            VALOR EM PATRIMÔNIO
-          </span>
-          <p style={{ fontSize: '32px', fontWeight: '800', color: '#2563eb', margin: '12px 0 0 0' }}>
-            {valorTotalPatrimonio.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-          </p>
-        </div>
-
-        <div
-          onClick={() => setAtribuicaoFiltro('EM_USO')}
-          style={{ background: '#ffffff', borderRadius: '16px', padding: '24px', border: '1px solid #e2e8f0', boxShadow: '0 4px 20px -2px rgba(0, 0, 0, 0.03)', cursor: 'pointer' }}
-          title="Clique para filtrar apenas os equipamentos Em Uso"
+        <BotaoFiltro
+          ativo={filtro === "equipamentos"}
+          onClick={() => setFiltro("equipamentos")}
         >
-          <span style={{ fontSize: '11px', fontWeight: '700', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-            ATRIBUIÇÃO (EM USO)
-          </span>
-          <p style={{ fontSize: '32px', fontWeight: '800', color: '#10b981', margin: '12px 0 0 0' }}>
-            {comAtribuicao}
-          </p>
-        </div>
+          🖥️ Equipamentos
+        </BotaoFiltro>
 
-        <div
-          onClick={() => setAtribuicaoFiltro('SEM_USO')}
-          style={{ background: '#ffffff', borderRadius: '16px', padding: '24px', border: '1px solid #e2e8f0', boxShadow: '0 4px 20px -2px rgba(0, 0, 0, 0.03)', cursor: 'pointer' }}
-          title="Clique para filtrar apenas os Sem Uso"
+        <BotaoFiltro
+          ativo={filtro === "impressoras"}
+          onClick={() => setFiltro("impressoras")}
         >
-          <span style={{ fontSize: '11px', fontWeight: '700', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-            SEM ATRIBUIÇÃO (DISPONÍVEIS)
-          </span>
-          <p style={{ fontSize: '32px', fontWeight: '800', color: '#f59e0b', margin: '12px 0 0 0' }}>
-            {semAtribuicao}
-          </p>
-        </div>
-
+          🖨️ Impressoras
+        </BotaoFiltro>
       </div>
 
-      {/* SEÇÃO INFERIOR */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.6fr', gap: '24px' }}>
-        
-        {/* EQUIPAMENTOS POR SETOR */}
-        <div style={{ background: '#ffffff', borderRadius: '16px', border: '1px solid #e2e8f0', padding: '24px', boxShadow: '0 4px 20px -2px rgba(0, 0, 0, 0.03)' }}>
-          <h2 style={{ fontSize: '16px', fontWeight: '700', color: '#0f172a', marginBottom: '20px' }}>
-            Equipamentos por Setor
-          </h2>
+      {/* CARDS */}
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', maxHeight: '520px', overflowY: 'auto', paddingRight: '6px' }}>
-            {setoresOrdenados.length === 0 ? (
-              <p style={{ color: '#94a3b8', fontSize: '13px' }}>Nenhum setor registrado.</p>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns:
+            "repeat(auto-fit, minmax(190px, 1fr))",
+          gap: "16px",
+          marginBottom: "24px",
+        }}
+      >
+        {mostrarEquipamentos && (
+          <Card
+            titulo="Equipamentos"
+            valor={totalEquipamentos}
+            icone="🖥️"
+          />
+        )}
+
+        {mostrarImpressoras && (
+          <Card
+            titulo="Impressoras"
+            valor={totalImpressoras}
+            icone="🖨️"
+          />
+        )}
+
+        <Card
+          titulo="Total de Ativos"
+          valor={totalAtivos}
+          icone="📦"
+        />
+
+        <Card
+          titulo="Funcionando"
+          valor={totalFuncionando}
+          icone="🟢"
+        />
+
+        <Card
+          titulo="Em Manutenção"
+          valor={totalManutencao}
+          icone="🟠"
+        />
+
+        <Card
+          titulo="Parados / Inativos"
+          valor={totalParados}
+          icone="🔴"
+        />
+      </div>
+
+      {/* GRÁFICOS */}
+
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns:
+            "repeat(auto-fit, minmax(320px, 1fr))",
+          gap: "20px",
+        }}
+      >
+        {/* SITUAÇÃO */}
+
+        <Painel titulo="Situação dos Ativos">
+          <Barra
+            titulo="Funcionando"
+            valor={totalFuncionando}
+            total={totalAtivos}
+          />
+
+          <Barra
+            titulo="Em manutenção"
+            valor={totalManutencao}
+            total={totalAtivos}
+          />
+
+          <Barra
+            titulo="Parados / Inativos"
+            valor={totalParados}
+            total={totalAtivos}
+          />
+
+          {totalAtivos === 0 && (
+            <MensagemVazia />
+          )}
+        </Painel>
+
+        {/* LOCAIS */}
+
+        <Painel titulo="Ativos por Local">
+          {locais.length === 0 ? (
+            <MensagemVazia />
+          ) : (
+            locais.map(([local, quantidade]) => (
+              <Barra
+                key={local}
+                titulo={local}
+                valor={quantidade}
+                total={Math.max(
+                  ...locais.map(
+                    ([, quantidade]) => quantidade
+                  )
+                )}
+              />
+            ))
+          )}
+        </Painel>
+
+        {/* MARCAS */}
+
+        {mostrarImpressoras && (
+          <Painel titulo="Impressoras por Marca">
+            {marcas.length === 0 ? (
+              <MensagemVazia />
             ) : (
-              setoresOrdenados.map((item) => (
-                <div
-                  key={item.nome}
-                  onClick={() => setSetorFiltro(item.nome)}
-                  style={{ cursor: 'pointer' }}
-                  title={`Clique para filtrar pelo setor ${item.nome}`}
-                >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', fontWeight: '600', color: '#334155', marginBottom: '6px' }}>
-                    <span style={{ color: setorFiltro === item.nome ? '#2563eb' : '#334155', fontWeight: setorFiltro === item.nome ? '800' : '600' }}>
-                      {item.nome}
-                    </span>
-                    <span style={{ color: '#64748b', fontWeight: '500' }}>
-                      {item.quantidade} item(ns) ({item.porcentagem}%)
-                    </span>
-                  </div>
-                  <div style={{ width: '100%', height: '8px', background: '#f1f5f9', borderRadius: '4px', overflow: 'hidden' }}>
-                    <div
-                      style={{
-                        width: `${item.porcentagem}%`,
-                        height: '100%',
-                        background: setorFiltro === item.nome ? '#1d4ed8' : '#2563eb',
-                        borderRadius: '4px',
-                        transition: 'width 0.4s ease'
-                      }}
-                    />
-                  </div>
-                </div>
-              ))
+              marcas.map(
+                ([marca, quantidade]) => (
+                  <Barra
+                    key={marca}
+                    titulo={marca}
+                    valor={quantidade}
+                    total={Math.max(
+                      ...marcas.map(
+                        ([, quantidade]) =>
+                          quantidade
+                      )
+                    )}
+                  />
+                )
+              )
             )}
-          </div>
-        </div>
+          </Painel>
+        )}
+      </div>
 
-        {/* PAINEL DE CONSULTA E LISTA FILTRADA */}
-        <div style={{ background: '#ffffff', borderRadius: '16px', border: '1px solid #e2e8f0', padding: '24px', boxShadow: '0 4px 20px -2px rgba(0, 0, 0, 0.03)' }}>
-          
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-            <h2 style={{ fontSize: '16px', fontWeight: '700', color: '#0f172a' }}>
-              Consulta de Equipamentos
-            </h2>
-            <span style={{ background: '#eff6ff', color: '#2563eb', padding: '4px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: '800' }}>
-              Exibindo: {equipamentosFiltrados.length}
-            </span>
-          </div>
+      {/* RESUMO */}
 
-          {/* BARRA DE FILTROS RÁPIDOS */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr', gap: '10px', marginBottom: '16px' }}>
-            
-            {/* Campo de Busca por Texto */}
-            <input
-              type="text"
-              placeholder="🔍 Buscar NOT, MT, Nome..."
-              value={buscaTexto}
-              onChange={(e) => setBuscaTexto(e.target.value)}
-              style={{ width: '100%', padding: '9px 12px', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '12px', outline: 'none', background: '#f8fafc', boxSizing: 'border-box' }}
+      <div
+        style={{
+          marginTop: "20px",
+          background: "#ffffff",
+          border: "1px solid #e2e8f0",
+          borderRadius: "14px",
+          padding: "22px",
+        }}
+      >
+        <h2
+          style={{
+            margin: "0 0 16px",
+            fontSize: "16px",
+            fontWeight: "800",
+            color: "#0f172a",
+          }}
+        >
+          Resumo
+        </h2>
+
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns:
+              "repeat(auto-fit, minmax(200px, 1fr))",
+            gap: "12px",
+          }}
+        >
+          {mostrarEquipamentos && (
+            <ResumoItem
+              titulo="Equipamentos cadastrados"
+              valor={equipamentos.length}
             />
-
-            {/* Select por Setor */}
-            <select
-              value={setorFiltro}
-              onChange={(e) => setSetorFiltro(e.target.value)}
-              style={{ width: '100%', padding: '9px 12px', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '12px', outline: 'none', background: '#f8fafc', boxSizing: 'border-box' }}
-            >
-              <option value="TODOS">🏢 Todos os Setores</option>
-              {listaSetores.map((setor) => (
-                <option key={setor} value={setor}>{setor}</option>
-              ))}
-            </select>
-
-            {/* Select por Atribuição / Status */}
-            <select
-              value={atribuicaoFiltro}
-              onChange={(e) => setAtribuicaoFiltro(e.target.value as any)}
-              style={{ width: '100%', padding: '9px 12px', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '12px', outline: 'none', background: '#f8fafc', boxSizing: 'border-box' }}
-            >
-              <option value="TODOS">👤 Todos os Status</option>
-              <option value="EM_USO">🟢 Em Uso (Com Responsável)</option>
-              <option value="SEM_USO">🟡 Sem Uso (Disponíveis)</option>
-            </select>
-
-          </div>
-
-          {/* BOTÃO PARA LIMPAR FILTROS SE HOUVER ALGUM FILTRO ATIVO */}
-          {temFiltroAtivo && (
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '16px' }}>
-              <button
-                onClick={limparFiltros}
-                style={{ background: '#f1f5f9', color: '#475569', border: 'none', padding: '5px 12px', borderRadius: '6px', fontSize: '11px', fontWeight: '700', cursor: 'pointer' }}
-              >
-                ✕ Limpar Filtros
-              </button>
-            </div>
           )}
 
-          {/* TABELA DE RESULTADOS */}
-          <div style={{ maxHeight: '420px', overflowY: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: '0', textAlign: 'left' }}>
-              <thead>
-                <tr style={{ background: '#f8fafc', position: 'sticky', top: 0, zIndex: 1 }}>
-                  <th style={{ padding: '10px 12px', fontSize: '10px', color: '#64748b', fontWeight: '800', letterSpacing: '0.05em' }}>PATRIMÔNIO</th>
-                  <th style={{ padding: '10px 12px', fontSize: '10px', color: '#64748b', fontWeight: '800', letterSpacing: '0.05em' }}>EQUIPAMENTO</th>
-                  <th style={{ padding: '10px 12px', fontSize: '10px', color: '#64748b', fontWeight: '800', letterSpacing: '0.05em' }}>RESPONSÁVEL / SETOR</th>
-                  <th style={{ padding: '10px 12px', fontSize: '10px', color: '#64748b', fontWeight: '800', letterSpacing: '0.05em', textAlign: 'right' }}>VALOR</th>
-                </tr>
-              </thead>
-              <tbody>
-                {equipamentosFiltrados.length === 0 ? (
-                  <tr>
-                    <td colSpan={4} style={{ padding: '32px', textAlign: 'center', color: '#94a3b8', fontSize: '13px' }}>
-                      Nenhum equipamento encontrado com os filtros aplicados.
-                    </td>
-                  </tr>
-                ) : (
-                  equipamentosFiltrados.map((item, idx) => {
-                    const valorNum = typeof item.valor === 'number' ? item.valor : parseFloat(String(item.valor || 0));
-                    const temUsuario = Boolean(item.usuario && item.usuario.trim() !== '' && item.usuario !== '—');
+          {mostrarImpressoras && (
+            <ResumoItem
+              titulo="Impressoras cadastradas"
+              valor={impressoras.length}
+            />
+          )}
 
-                    return (
-                      <tr key={item.id || idx}>
-                        <td style={{ padding: '12px', borderBottom: '1px solid #f1f5f9', fontSize: '13px', fontWeight: '700', color: '#2563eb' }}>
-                          {item.patrimonio || '—'}
-                        </td>
-
-                        <td style={{ padding: '12px', borderBottom: '1px solid #f1f5f9', fontSize: '13px', color: '#0f172a', fontWeight: '600' }}>
-                          {item.nome || '—'}
-                        </td>
-
-                        <td style={{ padding: '12px', borderBottom: '1px solid #f1f5f9' }}>
-                          <div style={{ fontSize: '12px', fontWeight: '600', color: temUsuario ? '#334155' : '#94a3b8' }}>
-                            {temUsuario ? item.usuario : 'Sem Atribuição'}
-                          </div>
-                          <div style={{ fontSize: '10px', color: '#64748b', marginTop: '2px' }}>
-                            {item.setorUsuario || 'Geral'}
-                          </div>
-                        </td>
-
-                        <td style={{ padding: '12px', borderBottom: '1px solid #f1f5f9', fontSize: '13px', fontWeight: '600', color: '#0f172a', textAlign: 'right' }}>
-                          {(isNaN(valorNum) ? 0 : valorNum).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
-
+          <ResumoItem
+            titulo="Total de ativos"
+            valor={totalAtivos}
+          />
         </div>
-
       </div>
-
     </div>
   );
+}
+
+/* ==========================================================
+   COMPONENTES
+========================================================== */
+
+function BotaoFiltro({
+  ativo,
+  onClick,
+  children,
+}: {
+  ativo: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        padding: "10px 18px",
+        border: ativo
+          ? "1px solid #2563eb"
+          : "1px solid #e2e8f0",
+        borderRadius: "9px",
+        background: ativo ? "#eff6ff" : "#ffffff",
+        color: ativo ? "#2563eb" : "#475569",
+        fontWeight: "700",
+        cursor: "pointer",
+        fontSize: "13px",
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+function Card({
+  titulo,
+  valor,
+  icone,
+}: {
+  titulo: string;
+  valor: number;
+  icone: string;
+}) {
+  return (
+    <div
+      style={{
+        background: "#ffffff",
+        border: "1px solid #e2e8f0",
+        borderRadius: "14px",
+        padding: "20px",
+        boxShadow:
+          "0 4px 20px -2px rgba(0,0,0,0.04)",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: "14px",
+        }}
+      >
+        <span
+          style={{
+            fontSize: "13px",
+            color: "#64748b",
+            fontWeight: "700",
+          }}
+        >
+          {titulo}
+        </span>
+
+        <span style={{ fontSize: "22px" }}>
+          {icone}
+        </span>
+      </div>
+
+      <strong
+        style={{
+          fontSize: "30px",
+          color: "#0f172a",
+        }}
+      >
+        {valor}
+      </strong>
+    </div>
+  );
+}
+
+function Painel({
+  titulo,
+  children,
+}: {
+  titulo: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div
+      style={{
+        background: "#ffffff",
+        border: "1px solid #e2e8f0",
+        borderRadius: "14px",
+        padding: "22px",
+        minWidth: 0,
+        boxShadow:
+          "0 4px 20px -2px rgba(0,0,0,0.04)",
+      }}
+    >
+      <h2
+        style={{
+          margin: "0 0 22px",
+          fontSize: "16px",
+          fontWeight: "800",
+          color: "#0f172a",
+        }}
+      >
+        {titulo}
+      </h2>
+
+      {children}
+    </div>
+  );
+}
+
+function Barra({
+  titulo,
+  valor,
+  total,
+}: {
+  titulo: string;
+  valor: number;
+  total: number;
+}) {
+  const percentual =
+    total > 0
+      ? Math.min((valor / total) * 100, 100)
+      : 0;
+
+  return (
+    <div style={{ marginBottom: "16px" }}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          gap: "12px",
+          marginBottom: "7px",
+          fontSize: "12px",
+        }}
+      >
+        <span
+          style={{
+            color: "#475569",
+            fontWeight: "600",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+          }}
+        >
+          {titulo}
+        </span>
+
+        <strong style={{ color: "#0f172a" }}>
+          {valor}
+        </strong>
+      </div>
+
+      <div
+        style={{
+          height: "8px",
+          background: "#e2e8f0",
+          borderRadius: "10px",
+          overflow: "hidden",
+        }}
+      >
+        <div
+          style={{
+            width: `${percentual}%`,
+            height: "100%",
+            background: "#2563eb",
+            borderRadius: "10px",
+            transition: "width 0.3s ease",
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function ResumoItem({
+  titulo,
+  valor,
+}: {
+  titulo: string;
+  valor: number;
+}) {
+  return (
+    <div
+      style={{
+        background: "#f8fafc",
+        borderRadius: "10px",
+        padding: "14px 16px",
+      }}
+    >
+      <div
+        style={{
+          color: "#64748b",
+          fontSize: "12px",
+          marginBottom: "4px",
+        }}
+      >
+        {titulo}
+      </div>
+
+      <strong
+        style={{
+          fontSize: "20px",
+          color: "#0f172a",
+        }}
+      >
+        {valor}
+      </strong>
+    </div>
+  );
+}
+
+function MensagemVazia() {
+  return (
+    <div
+      style={{
+        padding: "30px 10px",
+        textAlign: "center",
+        color: "#94a3b8",
+        fontSize: "13px",
+      }}
+    >
+      Nenhum dado disponível.
+    </div>
+  );
+}
+
+function normalizar(valor?: string) {
+  return (valor || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
 }
 
 export default Dashboard;
